@@ -13,25 +13,27 @@ public class Hero {
     private Vector2 lastDisplacement;
     private float angel;
 
-    public Vector2 getLastDisplacement() {
-
-        return lastDisplacement;
-    }
-
     public Hero() {
         this.texture = new Texture("ship.png");
         this.position = new Vector2(640, 360);
         this.lastDisplacement = new Vector2(0, 0);
         this.angel = 0.0f;
     }
+
+    public Vector2 getLastDisplacement() {
+
+        return lastDisplacement;
+    }
+
     public void render(SpriteBatch batch) {
         batch.draw(texture, position.x - 32, position.y - 32, 32, 32, 64, 64, 1, 1,
                 angel, 0, 0, 64, 64, false, false);
     }
+
     public void update(float dt) {
         if (Gdx.input.isKeyPressed(Input.Keys.S)) {
-            position.x += -MathUtils.cosDeg(angel)/5 * 240.0f * dt;
-            position.y += -MathUtils.sinDeg(angel)/5 * 240.0f * dt;
+            position.x += -MathUtils.cosDeg(angel) / 5 * 240.0f * dt;
+            position.y += -MathUtils.sinDeg(angel) / 5 * 240.0f * dt;
             lastDisplacement.set(MathUtils.cosDeg(angel) * 240.0f * dt,
                     MathUtils.sinDeg(angel) * 240.0f * dt);
         }
