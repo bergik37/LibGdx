@@ -1,38 +1,32 @@
-
-
-import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Polygon;
-import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.scenes.scene2d.Actor;
-import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
-import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.Batch;
-import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.*;
 import com.badlogic.gdx.math.Intersector.MinimumTranslationVector;
-import java.util.ArrayList;
-import com.badlogic.gdx.math.Rectangle;
-import com.badlogic.gdx.graphics.Camera;
-import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.viewport.Viewport;
+
+import java.util.ArrayList;
 
 public class BaseActor extends Group {
+    private static Rectangle worldBounds;
     private Animation<TextureRegion> animation;
     private float elapsedTime;
     private boolean animationPaused;
-
     private Vector2 velocityVec;
     private Vector2 accelerationVec;
     private float acceleration;
     private float maxSpeed;
     private float deceleration;
     private Polygon boundaryPolygon;
-    private static Rectangle worldBounds;
 
 
     public BaseActor(float x, float y, Stage s) {
@@ -63,6 +57,45 @@ public class BaseActor extends Group {
     // ---
 
     /**
+     * Set world dimensions for use by methods boundToWorld() and scrollTo().
+     *
+     * @param width  width of world
+     * @param height height of world
+     */
+    public static void setWorldBounds(float width, float height) {
+        worldBounds = new Rectangle(0, 0, width, height);
+    }
+
+    public static void setWorldBounds(BaseActor ba) {
+        setWorldBounds(ba.getWidth(), ba.getHeight());
+    }
+
+    // ----------------------------------------------
+    // Instance list methods
+    // -------
+    public static ArrayList<BaseActor> getList(Stage stage, String className) {
+        ArrayList<BaseActor> list = new ArrayList<BaseActor>();
+
+        Class theClass = null;
+        try {
+            theClass = Class.forName(className);
+        } catch (Exception error) {
+            error.printStackTrace();
+        }
+
+        for (Actor a : stage.getActors()) {
+            if (theClass.isInstance(a))
+                list.add((BaseActor) a);
+        }
+
+        return list;
+    }
+
+    public static int count(Stage stage, String className) {
+        return getList(stage, className).size();
+    }
+
+    /**
      * После установки анимации можно будет задать размер (ширину и высоту) актера,
      * а также начало координат (точка, вокруг которой должен вращаться актер, как правило, центр актера).
      * Ширина и высота актера будут установлены на ширину и высоту первого изображения анимации (the
@@ -84,6 +117,10 @@ public class BaseActor extends Group {
         animationPaused = pause;
     }
 
+
+    // ----------------------------------------------
+    // physics/motion methods
+    // ----------------------------------------------
 
     /*
     Этот метод также возвращает анимацию, которая была создана, в том случае, если несколько анимаций требуются для
@@ -167,46 +204,50 @@ public class BaseActor extends Group {
         return animation.isAnimationFinished(elapsedTime);
     }
 
-
-    // ----------------------------------------------
-    // physics/motion methods
-    // ----------------------------------------------
-
     /**
-     *  Set acceleration of this object.
-     *  @param acc Acceleration in (pixels/second) per second.
+     * Set acceleration of this object.
+     *
+     * @param acc Acceleration in (pixels/second) per second.
      */
-    public void setAcceleration(float acc)
-    {
+    public void setAcceleration(float acc) {
         acceleration = acc;
     }
 
     /**
-     *  Set deceleration of this object.
-     *  Deceleration is only applied when object is not accelerating.
-     *  @param dec Deceleration in (pixels/second) per second.
+     * Set deceleration of this object.
+     * Deceleration is only applied when object is not accelerating.
+     *
+     * @param dec Deceleration in (pixels/second) per second.
      */
-    public void setDeceleration(float dec)
-    {
+    public void setDeceleration(float dec) {
         deceleration = dec;
     }
 
     /**
-     *  Set maximum speed of this object.
-     *  @param ms Maximum speed of this object in (pixels/second).
+     * Set maximum speed of this object.
+     *
+     * @param ms Maximum speed of this object in (pixels/second).
      */
-    public void setMaxSpeed(float ms)
-    {
+    public void setMaxSpeed(float ms) {
         maxSpeed = ms;
     }
 
     /**
-     *  Set the speed of movement (in pixels/second) in current direction.
-     *  If current speed is zero (direction is undefined), direction will be set to 0 degrees.
-     *  @param speed of movement (pixels/second)
+     * Calculates the speed of movement (in pixels/second).
+     *
+     * @return speed of movement (pixels/second)
      */
-    public void setSpeed(float speed)
-    {
+    public float getSpeed() {
+        return velocityVec.len();
+    }
+
+    /**
+     * Set the speed of movement (in pixels/second) in current direction.
+     * If current speed is zero (direction is undefined), direction will be set to 0 degrees.
+     *
+     * @param speed of movement (pixels/second)
+     */
+    public void setSpeed(float speed) {
         // если длина равна нулю, то предположим, что угол движения равен нулю градусов
         if (velocityVec.len() == 0)
             velocityVec.set(speed, 0);
@@ -215,83 +256,74 @@ public class BaseActor extends Group {
     }
 
     /**
-     *  Calculates the speed of movement (in pixels/second).
-     *  @return speed of movement (pixels/second)
+     * Determines if this object is moving (if speed is greater than zero).
+     *
+     * @return false when speed is zero, true otherwise
      */
-    public float getSpeed()
-    {
-        return velocityVec.len();
-    }
-
-    /**
-     *  Determines if this object is moving (if speed is greater than zero).
-     *  @return false when speed is zero, true otherwise
-     */
-    public boolean isMoving()
-    {
+    public boolean isMoving() {
         return (getSpeed() > 0);
     }
 
     /**
-     *  Sets the angle of motion (in degrees).
-     *  If current speed is zero, this will have no effect.
-     *  @param angle of motion (degrees)
+     * Get the angle of motion (in degrees), calculated from the velocity vector.
+     * <br>
+     * To align actor image angle with motion angle, use <code>setRotation( getMotionAngle() )</code>.
+     *
+     * @return angle of motion (degrees)
      */
-    public void setMotionAngle(float angle)
-    {
-        velocityVec.setAngle(angle);
-    }
-
-    /**
-     *  Get the angle of motion (in degrees), calculated from the velocity vector.
-     *  <br>
-     *  To align actor image angle with motion angle, use <code>setRotation( getMotionAngle() )</code>.
-     *  @return angle of motion (degrees)
-     */
-    public float getMotionAngle()
-    {
+    public float getMotionAngle() {
         return velocityVec.angle();
     }
 
     /**
-     *  Update accelerate vector by angle and value stored in acceleration field.
-     *  Acceleration is applied by <code>applyPhysics</code> method.
-     *  @param angle Angle (degrees) in which to accelerate.
-     *  @see #acceleration
-     *  @see #applyPhysics
+     * Sets the angle of motion (in degrees).
+     * If current speed is zero, this will have no effect.
+     *
+     * @param angle of motion (degrees)
      */
-    public void accelerateAtAngle(float angle)
-    {
+    public void setMotionAngle(float angle) {
+        velocityVec.setAngle(angle);
+    }
+
+    /**
+     * Update accelerate vector by angle and value stored in acceleration field.
+     * Acceleration is applied by <code>applyPhysics</code> method.
+     *
+     * @param angle Angle (degrees) in which to accelerate.
+     * @see #acceleration
+     * @see #applyPhysics
+     */
+    public void accelerateAtAngle(float angle) {
         accelerationVec.add(
-                new Vector2(acceleration, 0).setAngle(angle) );
+                new Vector2(acceleration, 0).setAngle(angle));
     }
 
     /**
-     *  Update accelerate vector by current rotation angle and value stored in acceleration field.
-     *  Acceleration is applied by <code>applyPhysics</code> method.
-     *  @see #acceleration
-     *  @see #applyPhysics
+     * Update accelerate vector by current rotation angle and value stored in acceleration field.
+     * Acceleration is applied by <code>applyPhysics</code> method.
+     *
+     * @see #acceleration
+     * @see #applyPhysics
      */
-    public void accelerateForward()
-    {
-        accelerateAtAngle( getRotation() );
+    public void accelerateForward() {
+        accelerateAtAngle(getRotation());
     }
 
     /**
-     *  Adjust velocity vector based on acceleration vector,
-     *  then adjust position based on velocity vector. <br>
-     *  If not accelerating, deceleration value is applied. <br>
-     *  Speed is limited by maxSpeed value. <br>
-     *  Acceleration vector reset to (0,0) at end of method. <br>
-     *  @param dt Time elapsed since previous frame (delta time); typically obtained from <code>act</code> method.
-     *  @see #acceleration
-     *  @see #deceleration
-     *  @see #maxSpeed
+     * Adjust velocity vector based on acceleration vector,
+     * then adjust position based on velocity vector. <br>
+     * If not accelerating, deceleration value is applied. <br>
+     * Speed is limited by maxSpeed value. <br>
+     * Acceleration vector reset to (0,0) at end of method. <br>
+     *
+     * @param dt Time elapsed since previous frame (delta time); typically obtained from <code>act</code> method.
+     * @see #acceleration
+     * @see #deceleration
+     * @see #maxSpeed
      */
-    public void applyPhysics(float dt)
-    {
+    public void applyPhysics(float dt) {
         // apply acceleration
-        velocityVec.add( accelerationVec.x * dt, accelerationVec.y * dt );
+        velocityVec.add(accelerationVec.x * dt, accelerationVec.y * dt);
 
         float speed = getSpeed();
 
@@ -306,107 +338,86 @@ public class BaseActor extends Group {
         setSpeed(speed);
 
         // apply velocity
-        moveBy( velocityVec.x * dt, velocityVec.y * dt );
+        moveBy(velocityVec.x * dt, velocityVec.y * dt);
 
         // reset acceleration
-        accelerationVec.set(0,0);
+        accelerationVec.set(0, 0);
     }
+
     // ----------------------------------------------
     // Collision polygon methods
     // -------------------
-    public void setBoundaryRectangle()
-    {
+    public void setBoundaryRectangle() {
         float w = getWidth();
         float h = getHeight();
-        float[] vertices = {0,0, w,0, w,h, 0,h};
+        float[] vertices = {0, 0, w, 0, w, h, 0, h};
         boundaryPolygon = new Polygon(vertices);
     }
-    public void setBoundaryPolygon(int numSides)
-    {
+
+    public Polygon getBoundaryPolygon() {
+        boundaryPolygon.setPosition(getX(), getY());
+        boundaryPolygon.setOrigin(getOriginX(), getOriginY());
+        boundaryPolygon.setRotation(getRotation());
+        boundaryPolygon.setScale(getScaleX(), getScaleY());
+        return boundaryPolygon;
+    }
+
+    public void setBoundaryPolygon(int numSides) {
         float w = getWidth();
         float h = getHeight();
-        float[] vertices = new float[2*numSides];
-        for (int i = 0; i < numSides; i++)
-        {
+        float[] vertices = new float[2 * numSides];
+        for (int i = 0; i < numSides; i++) {
             float angle = i * 6.28f / numSides;
             // x-coordinate
-            vertices[2*i] = w/2 * MathUtils.cos(angle) + w/2;
+            vertices[2 * i] = w / 2 * MathUtils.cos(angle) + w / 2;
             // y-coordinate
-            vertices[2*i+1] = h/2 * MathUtils.sin(angle) + h/2;
+            vertices[2 * i + 1] = h / 2 * MathUtils.sin(angle) + h / 2;
         }
         boundaryPolygon = new Polygon(vertices);
     }
 
-    public Polygon getBoundaryPolygon()
-    {
-        boundaryPolygon.setPosition( getX(), getY() );
-        boundaryPolygon.setOrigin( getOriginX(), getOriginY() );
-        boundaryPolygon.setRotation ( getRotation() );
-        boundaryPolygon.setScale( getScaleX(), getScaleY() );
-        return boundaryPolygon;
-    }
-    public boolean overlaps(BaseActor other)
-    {
+    public boolean overlaps(BaseActor other) {
         Polygon poly1 = this.getBoundaryPolygon();
         Polygon poly2 = other.getBoundaryPolygon();
         // initial test to improve performance
-        if ( !poly1.getBoundingRectangle().overlaps(poly2.getBoundingRectangle()) )
+        if (!poly1.getBoundingRectangle().overlaps(poly2.getBoundingRectangle()))
             return false;
-        return Intersector.overlapConvexPolygons( poly1, poly2 );
+        return Intersector.overlapConvexPolygons(poly1, poly2);
     }
 
-    public void centerAtPosition(float x, float y)
-    {
-        setPosition( x - getWidth()/2 , y - getHeight()/2 );
+    public void centerAtPosition(float x, float y) {
+        setPosition(x - getWidth() / 2, y - getHeight() / 2);
     }
 
-    public void centerAtActor(BaseActor other)
-    {
-        centerAtPosition( other.getX() + other.getWidth()/2 , other.getY() + other.getHeight()/2 );
+    public void centerAtActor(BaseActor other) {
+        centerAtPosition(other.getX() + other.getWidth() / 2, other.getY() + other.getHeight() / 2);
     }
 
-    public void setOpacity(float opacity)
-    {
+    public void setOpacity(float opacity) {
         this.getColor().a = opacity;
     }
 
-
-    public Vector2 preventOverlap(BaseActor other)
-    {
+    public Vector2 preventOverlap(BaseActor other) {
         Polygon poly1 = this.getBoundaryPolygon();
         Polygon poly2 = other.getBoundaryPolygon();
         // initial test to improve performance
-        if ( !poly1.getBoundingRectangle().overlaps(poly2.getBoundingRectangle()) )
+        if (!poly1.getBoundingRectangle().overlaps(poly2.getBoundingRectangle()))
             return null;
         MinimumTranslationVector mtv = new MinimumTranslationVector();
         boolean polygonOverlap = Intersector.overlapConvexPolygons(poly1, poly2, mtv);
-        if ( !polygonOverlap )
+        if (!polygonOverlap)
             return null;
-        this.moveBy( mtv.normal.x * mtv.depth, mtv.normal.y * mtv.depth );
+        this.moveBy(mtv.normal.x * mtv.depth, mtv.normal.y * mtv.depth);
         return mtv.normal;
     }
-    /**
-     *  Set world dimensions for use by methods boundToWorld() and scrollTo().
-     *  @param width width of world
-     *  @param height height of world
-     */
-    public static void setWorldBounds(float width, float height)
-    {
-        worldBounds = new Rectangle( 0,0, width, height );
-    }
 
-    public static void setWorldBounds(BaseActor ba)
-    {
-        setWorldBounds( ba.getWidth(), ba.getHeight() );
-    }
-/*
-Чтобы удержать актера в пределах прямоугольной области, определенной worldbounds, вам нужно будет выполнить четыре действия
-сравнение, чтобы проверить, прошли ли какие-либо ребра (левое, правое, верхнее и нижнее) актера за пределы
-соответствующие края экрана, и если это так, то соответствующая координата (x или y) устанавливается для сохранения актера на экране.
-экран. Это достигается с помощью следующего метода:
- */
-    public void boundToWorld()
-    {
+    /*
+    Чтобы удержать актера в пределах прямоугольной области, определенной worldbounds, вам нужно будет выполнить четыре действия
+    сравнение, чтобы проверить, прошли ли какие-либо ребра (левое, правое, верхнее и нижнее) актера за пределы
+    соответствующие края экрана, и если это так, то соответствующая координата (x или y) устанавливается для сохранения актера на экране.
+    экран. Это достигается с помощью следующего метода:
+     */
+    public void boundToWorld() {
         // check left edge
         if (getX() < 0)
             setX(0);
@@ -421,57 +432,28 @@ public class BaseActor extends Group {
             setY(worldBounds.height - getHeight());
     }
 
-    public void alignCamera()
-    {
+    public void alignCamera() {
         Camera cam = this.getStage().getCamera();
         Viewport v = this.getStage().getViewport();
         // center camera on actor
-        cam.position.set( this.getX() + this.getOriginX(), this.getY() + this.getOriginY(), 0 );
+        cam.position.set(this.getX() + this.getOriginX(), this.getY() + this.getOriginY(), 0);
         // bound camera to layout
         cam.position.x = MathUtils.clamp(cam.position.x,
-                cam.viewportWidth/2, worldBounds.width - cam.viewportWidth/2);
+                cam.viewportWidth / 2, worldBounds.width - cam.viewportWidth / 2);
         cam.position.y = MathUtils.clamp(cam.position.y,
-                cam.viewportHeight/2, worldBounds.height - cam.viewportHeight/2);
+                cam.viewportHeight / 2, worldBounds.height - cam.viewportHeight / 2);
         cam.update();
     }
-    public void wrapAroundWorld()
-    {
+
+    public void wrapAroundWorld() {
         if (getX() + getWidth() < 0)
-            setX( worldBounds.width );
+            setX(worldBounds.width);
         if (getX() > worldBounds.width)
-            setX( -getWidth());
+            setX(-getWidth());
         if (getY() + getHeight() < 0)
-            setY( worldBounds.height );
+            setY(worldBounds.height);
         if (getY() > worldBounds.height)
-            setY( -getHeight() );
-    }
-
-
-    // ----------------------------------------------
-    // Instance list methods
-    // -------
-    public static ArrayList<BaseActor> getList(Stage stage, String className)
-    {
-        ArrayList<BaseActor> list = new ArrayList<BaseActor>();
-
-        Class theClass = null;
-        try
-        {  theClass = Class.forName(className);  }
-        catch (Exception error)
-        {  error.printStackTrace();  }
-
-        for (Actor a : stage.getActors())
-        {
-            if ( theClass.isInstance( a ) )
-                list.add( (BaseActor)a );
-        }
-
-        return list;
-    }
-
-    public static int count(Stage stage, String className)
-    {
-        return getList(stage, className).size();
+            setY(-getHeight());
     }
 
     // ----------------------------------------------
@@ -482,6 +464,7 @@ public class BaseActor extends Group {
         if (!animationPaused)
             elapsedTime += dt;
     }
+
     public void draw(Batch batch, float parentAlpha) {
         // применить эффект цветового оттенка
         Color c = getColor();
@@ -490,6 +473,6 @@ public class BaseActor extends Group {
             batch.draw(animation.getKeyFrame(elapsedTime),
                     getX(), getY(), getOriginX(), getOriginY(),
                     getWidth(), getHeight(), getScaleX(), getScaleY(), getRotation());
-        super.draw( batch, parentAlpha );
+        super.draw(batch, parentAlpha);
     }
 }
